@@ -24,8 +24,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 # --- CONFIGURATION FROM ENVIRONMENT VARIABLES ---
 BOT_TOKEN = os.environ.get("TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.environ.get("TELEGRAM_ID", "YOUR_TELEGRAM_CHAT_ID")
-SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Bots Lab_ Demo Bot")
-INSTAGRAM_URL = os.environ.get("INSTAGRAM_URL", "https://instagram.com")
+SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Bots Lab_Demo Bot")
+INSTAGRAM_URL = os.environ.get("INSTAGRAM_URL", "instagram")
 
 # --- FLASK WEBSERVER FOR RENDER / UPTIMEROBOT KEEP-ALIVE ---
 app = Flask(__name__)
@@ -218,7 +218,7 @@ async def get_direction_callback(update: Update, context: ContextTypes.DEFAULT_T
     # Если вы брали стандартный вариант
     directions_map = {
         "dir_bot": "Разработка бота",
-        "dir_consult": "Консультация / Аудит"
+        "dir_consult": "Консультация"
     }
     direction = directions_map.get(data, data)
     return await finish_submission(update, context, direction)
@@ -235,7 +235,7 @@ async def back_to_direction_callback(update: Update, context: ContextTypes.DEFAU
     
     keyboard = [
         [InlineKeyboardButton("Разработка бота", callback_data="dir_bot")],
-        [InlineKeyboardButton("Консультация / Аудит", callback_data="dir_consult")],
+        [InlineKeyboardButton("Консультация", callback_data="dir_consult")],
         [InlineKeyboardButton("Другое", callback_data="dir_other")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_phone")]
     ]
