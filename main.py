@@ -3,11 +3,17 @@ import json
 import logging
 from flask import Flask
 from threading import Thread
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import (
+    Update, 
+    InlineKeyboardButton, 
+    InlineKeyboardMarkup, 
+    ReplyKeyboardRemove
+)
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
     filters,
@@ -66,80 +72,89 @@ logging.basicConfig(
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Очищаем временные данные при новом старте
+    context.user_data.clear()
     await update.message.reply_text(
-        "Здравствуйте!👋\n"
-        "Это демо-бот для приёма заявок.\n"
-        "Как к вам обращаться? (Введите ваше имя)"
+        "Здравствуйте! 👋 Это демо-бот для приёма заявок.\n\n"
+        "Как к вам обращаться? (Введите ваше имя)",
+        reply_markup=ReplyKeyboardRemove()
     )
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    context.user_data['name'] = text
+    context.user_data['name'] = update.message.text
 
-    # На шаге ввода телефона добавляем меню с кнопкой «Назад»
-    reply_keyboard = [['⬅️ Назад']]
+    # Инлайн-кнопка «Назад» прямо под сообщением бота
+    keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_name")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        "Отлично! Укажите ваш номер телефона для связи в формате +77XX XXX XX XX:",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, 
-            resize_keyboard=True, 
-            one_time_keyboard=True
-        )
+        "Отлично! Укажите ваш номер телефона для связи:",
+        reply_markup=reply_markup
     )
     return PHONE
 
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-
-    # Если пользователь нажал «Назад» при вводе телефона
-    if text == '⬅️ Назад':
-        await update.message.reply_text(
-            "Возвращаемся назад.\n\nКак к вам обращаться? (Введите ваше имя)",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return NAME
-
-    context.user_data['phone'] = text
+    # Запоминаем телефон
+    context.user_data['phone'] = update.message.text
     
-    # Кнопки выбора направления + кнопка «Назад»
-    reply_keyboard = [
-        ['Разработка бота'],
-        ['Консультация'],
-        ['Другое'],
-        ['⬅️ Назад']
+    # Инлайн-кнопки для выбора направления + кнопка «Назад»
+    keyboard = [
+        [InlineKeyboardButton("Разработка бота", callback_data="dir_bot")],
+        [InlineKeyboardButton("Консультация / Аудит", callback_data="dir_consult")],
+        [InlineKeyboardButton("Другое", callback_data="dir_other")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_phone")]
     ]
-    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         "Выберите интересующее вас направление:",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, 
-            one_time_keyboard=True, 
-            resize_keyboard=True
-        )
+        reply_markup=reply_markup
     )
     return DIRECTION
 
-async def get_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+# Callback: Нажата кнопка «Назад» на этапе ввода телефона
+async def back_to_name_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        "Возвращаемся назад.\n\nКак к вам обращаться? (Введите ваше имя)"
+    )
+    return NAME
 
-    # Если пользователь нажал «Назад» при выборе направления
-    if text == '⬅️ Назад':
-        reply_keyboard = [['⬅️ Назад']]
-        await update.message.reply_text(
-            "Возвращаемся назад.\n\nУкажите ваш номер телефона для связи:",
-            reply_markup=ReplyKeyboardMarkup(
-                reply_keyboard, 
-                resize_keyboard=True, 
-                one_time_keyboard=True
-            )
-        )
-        return PHONE
+# Callback: Нажата кнопка «Назад» на этапе выбора направления
+async def back_to_phone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_name")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        "Возвращаемся назад.\n\nУкажите ваш номер телефона для связи:",
+        reply_markup=reply_markup
+    )
+    return PHONE
+
+# Callback: Выбрано направление (финал)
+async def get_direction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    # Карта названий направлений
+    directions_map = {
+        "dir_bot": "Разработка бота",
+        "dir_consult": "Консультация / Аудит",
+        "dir_other": "Другое"
+    }
+    direction = directions_map.get(data, data)
 
     user_name = context.user_data.get('name', 'Не указано')
     user_phone = context.user_data.get('phone', 'Не указано')
-    direction = text
-    username = f"@{update.message.from_user.username}" if update.message.from_user.username else "Нет юзернейма"
+    username = f"@{query.from_user.username}" if query.from_user.username else "Нет юзернейма"
 
     # 1. Запись в Google Таблицу
     try:
@@ -148,34 +163,13 @@ async def get_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Error writing to Google Sheet: {e}")
 
-    # 2. Ответ пользователю
-    await update.message.reply_text(
+    # 2. Редактируем сообщение бота, убирая все кнопки и выводя благодарность
+    await query.edit_message_text(
         "Спасибо! Ваша заявка успешно записана в Google Таблицу. ✨\n\n"
-        "Мы свяжемся с вами в ближайшее время!",
-        reply_markup=ReplyKeyboardRemove()
+        "Мы свяжемся с вами в ближайшее время!"
     )
 
     # 3. Уведомление админу
-    admin_message = (
-        f"📥 **Новая заявка из демо-бота!**\n\n"
-        f"👤 **Имя:** {user_name}\n"
-        f"📞 **Телефон:** {user_phone}\n"
-        f"🎯 **Направление:** {direction}\n"
-        f"💬 **Telegram:** {username}"
-    )
-    
-    if ADMIN_CHAT_ID and ADMIN_CHAT_ID != "YOUR_TELEGRAM_CHAT_ID":
-        try:
-            await context.bot.send_message(
-                chat_id=ADMIN_CHAT_ID, 
-                text=admin_message, 
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            logging.error(f"Error sending admin notification: {e}")
-
-    return ConversationHandler.END
-    # 3. Send notification to admin
     admin_message = (
         f"📥 **Новая заявка из демо-бота!**\n\n"
         f"👤 **Имя:** {user_name}\n"
@@ -212,9 +206,17 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            DIRECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_direction)],
+            NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)
+            ],
+            PHONE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone),
+                CallbackQueryHandler(back_to_name_callback, pattern="^back_to_name$")
+            ],
+            DIRECTION: [
+                CallbackQueryHandler(get_direction_callback, pattern="^dir_"),
+                CallbackQueryHandler(back_to_phone_callback, pattern="^back_to_phone$")
+            ],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
