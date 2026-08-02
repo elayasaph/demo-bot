@@ -80,7 +80,13 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['phone'] = update.message.text
     
-    reply_keyboard = [['Разработка бота', 'Консультация / Аудит', 'Другое']]
+    # Кнопки должны быть вложенным списком: каждый внутренний список — это отдельный ряд кнопок
+    reply_keyboard = [
+        ['Разработка бота'],
+        ['Консультация'],
+        ['Другое']
+    ]
+    
     await update.message.reply_text(
         "Выберите интересующее вас направление:",
         reply_markup=ReplyKeyboardMarkup(
