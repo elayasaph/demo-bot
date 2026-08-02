@@ -271,7 +271,7 @@ async def select_time_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     user_obj = query.from_user
     username = f"@{user_obj.username}" if user_obj.username else "Нет юзернейма"
     
-    user_info = f"{user_name} ({user_phone}, {username})"
+    user_info = f"{user_name} ({user_phone}, Telegram: {username})"
     
     # Бронируем слот
     is_booked = book_slot(selected_date, selected_time, user_info)
