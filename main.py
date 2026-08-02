@@ -25,7 +25,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 BOT_TOKEN = os.environ.get("TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.environ.get("TELEGRAM_ID", "YOUR_TELEGRAM_CHAT_ID")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Bots Lab_Demo Bot")
-INSTAGRAM_URL = os.environ.get("INSTAGRAM_URL", "instagram")
+INSTAGRAM_URL = os.environ.get("INSTAGRAM_URL", "https://instagram.com")
 
 # --- FLASK WEBSERVER FOR RENDER / UPTIMEROBOT KEEP-ALIVE ---
 app = Flask(__name__)
@@ -277,8 +277,8 @@ def main():
                 CallbackQueryHandler(back_to_phone_callback, pattern="^back_to_phone$")
             ],
             OTHER_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_other_text),
-                CallbackQueryHandler(back_to_direction_callback, pattern="^back_to_direction$")
+                CallbackQueryHandler(back_to_direction_callback, pattern="^back_to_direction$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_other_text)
             ],
         },
         fallbacks=[
