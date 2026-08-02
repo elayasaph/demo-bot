@@ -66,12 +66,20 @@ def get_google_sheet(worksheet_name=None):
     return spreadsheet.sheet1
 
 # Вспомогательные функции для работы со слотами
+# Вспомогательные функции для работы со слотами (улучшенные)
 def get_free_dates():
     try:
         sheet = get_google_sheet("Слоты")
         records = sheet.get_all_records()
-        dates = sorted(list(set([r['Дата'] for r in records if str(r['Статус']).strip().lower() == 'свободно'])))
-        return dates
+        dates = []
+        for r in records:
+            # Приводим заголовок статуса и его значение к нижнему регистру и очищаем от пробелов
+            status = str(r.get('Статус', '')).strip().lower()
+            if status in ['свободно', 'free']:
+                date_val = str(r.get('Дата', '')).strip()
+                if date_val and date_val not in dates:
+                    dates.append(date_val)
+        return sorted(dates)
     except Exception as e:
         logging.error(f"Error fetching free dates: {e}")
         return []
@@ -80,7 +88,14 @@ def get_free_times(selected_date):
     try:
         sheet = get_google_sheet("Слоты")
         records = sheet.get_all_records()
-        times = [r['Время'] for r in records if str(r['Дата']) == str(selected_date) and str(r['Статус']).strip().lower() == 'свободно']
+        times = []
+        for r in records:
+            status = str(r.get('Статус', '')).strip().lower()
+            date_val = str(r.get('Дата', '')).strip()
+            if date_val == str(selected_date).strip() and status in ['свободно', 'free']:
+                time_val = str(r.get('Время', '')).strip()
+                if time_val:
+                    times.append(time_val)
         return times
     except Exception as e:
         logging.error(f"Error fetching free times: {e}")
@@ -91,11 +106,15 @@ def book_slot(selected_date, selected_time, user_info):
         sheet = get_google_sheet("Слоты")
         records = sheet.get_all_records()
         
-        # Находим нужную строку (учитываем +2 из-за заголовка и 1-based индексации)
         for i, r in enumerate(records):
-            if str(r['Дата']) == str(selected_date) and str(r['Время']) == str(selected_time):
-                if str(r['Статус']).strip().lower() == 'свободно':
-                    row_number = i + 2
+            status = str(r.get('Статус', '')).strip().lower()
+            date_val = str(r.get('Дата', '')).strip()
+            time_val = str(r.get('Время', '')).strip()
+            
+            if date_val == str(selected_date).strip() and time_val == str(selected_time).strip():
+                if status in ['свободно', 'free']:
+                    row_number = i + 2  # +1 за заголовки, +1 за 1-based индекс
+                    # Записываем "Занято" в 3-й столбец (C) и инфо в 4-й (D)
                     sheet.update_cell(row_number, 3, "Занято")
                     sheet.update_cell(row_number, 4, user_info)
                     return True
