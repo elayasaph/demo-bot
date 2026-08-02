@@ -26,6 +26,9 @@ BOT_TOKEN = os.environ.get("TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = os.environ.get("TELEGRAM_ID", "YOUR_TELEGRAM_CHAT_ID")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Bots Lab_ Demo Bot")
 
+# Укажите ссылку на ваш Instagram (можно задать в Render в Environment Variables как INSTAGRAM_URL)
+INSTAGRAM_URL = os.environ.get("INSTAGRAM_URL", "https://instagram.com")  
+
 # --- FLASK WEBSERVER FOR RENDER / UPTIMEROBOT KEEP-ALIVE ---
 app = Flask(__name__)
 
@@ -74,11 +77,19 @@ logging.basicConfig(
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Очищаем временные данные при новом старте
     context.user_data.clear()
-    await update.message.reply_text(
+    
+    text = (
         "Здравствуйте! 👋 Это демо-бот для приёма заявок.\n\n"
-        "Как к вам обращаться? (Введите ваше имя)",
-        reply_markup=ReplyKeyboardRemove()
+        "Как к вам обращаться? (Введите ваше имя)"
     )
+    
+    if update.message:
+        await update.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+    elif update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(text)
+        
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -163,13 +174,21 @@ async def get_direction_callback(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logging.error(f"Error writing to Google Sheet: {e}")
 
-    # 2. Редактируем сообщение бота, убирая все кнопки и выводя благодарность
+    # 2. Финальные кнопки под сообщением
+    keyboard = [
+        [InlineKeyboardButton("🔄 Подать новую заявку", callback_data="start_menu")],
+        [InlineKeyboardButton("🌐 Наш Instagram", url=INSTAGRAM_URL)]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # 3. Редактируем сообщение бота, убирая старые кнопки и выводя финальный экран
     await query.edit_message_text(
         "Спасибо! Ваша заявка успешно записана в Google Таблицу. ✨\n\n"
-        "Мы свяжемся с вами в ближайшее время!"
+        "Мы свяжемся с вами в ближайшее время!",
+        reply_markup=reply_markup
     )
 
-    # 3. Уведомление админу
+    # 4. Уведомление админу
     admin_message = (
         f"📥 **Новая заявка из демо-бота!**\n\n"
         f"👤 **Имя:** {user_name}\n"
@@ -204,7 +223,10 @@ def main():
     app_bot = ApplicationBuilder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[
+            CommandHandler('start', start),
+            CallbackQueryHandler(start, pattern="^start_menu$")
+        ],
         states={
             NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)
@@ -218,7 +240,10 @@ def main():
                 CallbackQueryHandler(back_to_phone_callback, pattern="^back_to_phone$")
             ],
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[
+            CommandHandler('cancel', cancel),
+            CallbackQueryHandler(start, pattern="^start_menu$")
+        ]
     )
 
     app_bot.add_handler(conv_handler)
