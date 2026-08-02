@@ -77,12 +77,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Как к вам обращаться? (Введите ваше имя)"
     )
     
+    # Если запуск через /start
     if update.message:
         await update.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+    
+    # Если запуск по кнопке «Подать новую заявку»
     elif update.callback_query:
         query = update.callback_query
         await query.answer()
-        await query.edit_message_text(text)
+        
+        # 1. Убираем кнопки у финального сообщения, чтобы оно осталось в истории как текст
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception as e:
+            logging.error(f"Error removing inline keyboard: {e}")
+            
+        # 2. Отправляем НОВОЕ сообщение с приветствием и вопросом про имя
+        await query.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
         
     return NAME
 
