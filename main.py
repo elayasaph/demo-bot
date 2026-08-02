@@ -73,18 +73,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['name'] = update.message.text
-    await update.message.reply_text("Отлично! Укажите ваш номер телефона для связи:")
+    text = update.message.text
+    context.user_data['name'] = text
+
+    # На шаге ввода телефона добавляем меню с кнопкой «Назад»
+    reply_keyboard = [['⬅️ Назад']]
+    await update.message.reply_text(
+        "Отлично! Укажите ваш номер телефона для связи:",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, 
+            resize_keyboard=True, 
+            one_time_keyboard=True
+        )
+    )
     return PHONE
 
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['phone'] = update.message.text
+    text = update.message.text
+
+    # Если пользователь нажал «Назад» при вводе телефона
+    if text == '⬅️ Назад':
+        await update.message.reply_text(
+            "Возвращаемся назад.\n\nКак к вам обращаться? (Введите ваше имя)",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return NAME
+
+    context.user_data['phone'] = text
     
-    # Кнопки должны быть вложенным списком: каждый внутренний список — это отдельный ряд кнопок
+    # Кнопки выбора направления + кнопка «Назад»
     reply_keyboard = [
         ['Разработка бота'],
         ['Консультация'],
-        ['Другое']
+        ['Другое'],
+        ['⬅️ Назад']
     ]
     
     await update.message.reply_text(
@@ -98,25 +120,60 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return DIRECTION
 
 async def get_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_name = context.user_data['name']
-    user_phone = context.user_data['phone']
-    direction = update.message.text
+    text = update.message.text
+
+    # Если пользователь нажал «Назад» при выборе направления
+    if text == '⬅️ Назад':
+        reply_keyboard = [['⬅️ Назад']]
+        await update.message.reply_text(
+            "Возвращаемся назад.\n\nУкажите ваш номер телефона для связи:",
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, 
+                resize_keyboard=True, 
+                one_time_keyboard=True
+            )
+        )
+        return PHONE
+
+    user_name = context.user_data.get('name', 'Не указано')
+    user_phone = context.user_data.get('phone', 'Не указано')
+    direction = text
     username = f"@{update.message.from_user.username}" if update.message.from_user.username else "Нет юзернейма"
 
-    # 1. Append record into Google Sheet
+    # 1. Запись в Google Таблицу
     try:
         sheet = get_google_sheet()
         sheet.append_row([user_name, user_phone, direction, username])
     except Exception as e:
         logging.error(f"Error writing to Google Sheet: {e}")
 
-    # 2. Reply to potential client
+    # 2. Ответ пользователю
     await update.message.reply_text(
         "Спасибо! Ваша заявка успешно записана в Google Таблицу. ✨\n\n"
         "Мы свяжемся с вами в ближайшее время!",
         reply_markup=ReplyKeyboardRemove()
     )
 
+    # 3. Уведомление админу
+    admin_message = (
+        f"📥 **Новая заявка из демо-бота!**\n\n"
+        f"👤 **Имя:** {user_name}\n"
+        f"📞 **Телефон:** {user_phone}\n"
+        f"🎯 **Направление:** {direction}\n"
+        f"💬 **Telegram:** {username}"
+    )
+    
+    if ADMIN_CHAT_ID and ADMIN_CHAT_ID != "YOUR_TELEGRAM_CHAT_ID":
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_CHAT_ID, 
+                text=admin_message, 
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logging.error(f"Error sending admin notification: {e}")
+
+    return ConversationHandler.END
     # 3. Send notification to admin
     admin_message = (
         f"📥 **Новая заявка из демо-бота!**\n\n"
