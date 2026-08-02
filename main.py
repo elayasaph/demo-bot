@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from flask import Flask
 from threading import Thread
@@ -15,11 +16,11 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # --- CONFIGURATION FROM ENVIRONMENT VARIABLES ---
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "YOUR_TELEGRAM_CHAT_ID")
-SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Demo_Bot_Leads")
+BOT_TOKEN = os.environ.get("TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
+ADMIN_CHAT_ID = os.environ.get("TELEGRAM_ID", "YOUR_TELEGRAM_CHAT_ID")
+SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Bots Lab_ Demo Bot")
 
-# --- FLASK WEBSERVER FOR RENDERING / UPTIMEROBOT KEEP-ALIVE ---
+# --- FLASK WEBSERVER FOR RENDER / UPTIMEROBOT KEEP-ALIVE ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -41,8 +42,18 @@ def get_google_sheet():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    # Expects credentials.json in the same root folder
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+    
+    # Сначала пробуем взять ключ из переменной окружения Render
+    google_creds_json = os.environ.get("GOOGLE_CREDENTIALS")
+    
+    if google_creds_json:
+        # Для Render
+        creds_dict = json.loads(google_creds_json)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    else:
+        # Для локальной проверки на вашем компьютере
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        
     client = gspread.authorize(creds)
     return client.open(SPREADSHEET_NAME).sheet1
 
@@ -56,9 +67,7 @@ logging.basicConfig(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Здравствуйте! 👋 Это демо-бот для приёма заявок.
-
-"
+        "Здравствуйте! 👋 Это демо-бот для приёма заявок.\n\n"
         "Как к вам обращаться? (Введите ваше имя)"
     )
     return NAME
@@ -97,24 +106,17 @@ async def get_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 2. Reply to potential client
     await update.message.reply_text(
-        "Спасибо! Ваша заявка успешно записана в Google Таблицу. ✨
-
-"
+        "Спасибо! Ваша заявка успешно записана в Google Таблицу. ✨\n\n"
         "Мы свяжемся с вами в ближайшее время!",
         reply_markup=ReplyKeyboardRemove()
     )
 
-    # 3. Send notification to admin (You)
+    # 3. Send notification to admin
     admin_message = (
-        f"📥 **Новая заявка из демо-бота!**
-
-"
-        f"👤 **Имя:** {user_name}
-"
-        f"📞 **Телефон:** {user_phone}
-"
-        f"🎯 **Направление:** {direction}
-"
+        f"📥 **Новая заявка из демо-бота!**\n\n"
+        f"👤 **Имя:** {user_name}\n"
+        f"📞 **Телефон:** {user_phone}\n"
+        f"🎯 **Направление:** {direction}\n"
         f"💬 **Telegram:** {username}"
     )
     
@@ -154,7 +156,7 @@ def main():
     )
 
     app_bot.add_handler(conv_handler)
-    print("Бот запущен и готов приём заказов...")
+    print("Бот запущен и готов к приёму заявок...")
     app_bot.run_polling()
 
 if __name__ == '__main__':
