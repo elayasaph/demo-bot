@@ -67,7 +67,8 @@ logging.basicConfig(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Здравствуйте! 👋 Это демо-бот для приёма заявок.\n\n"
+        "Здравствуйте!👋\n"
+        "Это демо-бот для приёма заявок.\n"
         "Как к вам обращаться? (Введите ваше имя)"
     )
     return NAME
@@ -79,7 +80,7 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # На шаге ввода телефона добавляем меню с кнопкой «Назад»
     reply_keyboard = [['⬅️ Назад']]
     await update.message.reply_text(
-        "Отлично! Укажите ваш номер телефона для связи:",
+        "Отлично! Укажите ваш номер телефона для связи в формате +77XX XXX XX XX:",
         reply_markup=ReplyKeyboardMarkup(
             reply_keyboard, 
             resize_keyboard=True, 
