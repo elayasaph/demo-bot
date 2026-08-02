@@ -167,7 +167,9 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PHONE
 
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['phone'] = update.message.text
+    # Сохраняем введенный телефон в контекст
+    if update.message:
+        context.user_data['phone'] = update.message.text
     
     keyboard = [
         [InlineKeyboardButton("Разработка бота", callback_data="dir_bot")],
@@ -177,10 +179,17 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.message.reply_text(
-        "Выберите интересующее вас направление:",
-        reply_markup=reply_markup
-    )
+    text = "Выберите интересующее вас направление:"
+
+    # Если пришли после ввода текста — присылаем новое сообщение, сохраняя номер в истории
+    if update.message:
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    # Если вернулись по кнопке «Назад» — редактируем текущее
+    elif update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(text, reply_markup=reply_markup)
+
     return DIRECTION
 
 # --- CALLBACKS ДЛЯ НАВИГАЦИИ НАЗАД ---
@@ -286,30 +295,43 @@ async def finish_submission(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     username = f"@{user_obj.username}" if user_obj.username else "Нет юзернейма"
 
-    # Запись в основную вкладку Google Таблицы
+    # 1. Запись в основную вкладку Google Таблицы
     try:
         sheet = get_google_sheet()
         sheet.append_row([user_name, user_phone, direction_text, username])
     except Exception as e:
         logging.error(f"Error writing to main Google Sheet: {e}")
 
+    # 2. Формируем красивое финальное сообщение
+    if direction_text.startswith("Консультация:"):
+        # Извлекаем "10.08 в 14:00" из строки
+        details = direction_text.replace("Консультация:", "").strip()
+        final_text = (
+            f"Спасибо! ✨\n\n"
+            f"🗓 **Вы успешно записаны на консультацию:**\n"
+            f"👉 **{details}**\n\n"
+            f"Мы свяжемся с вами для подтверждения!"
+        )
+    else:
+        final_text = (
+            f"Спасибо! Ваша заявка по направлению **«{direction_text}»** успешно записана. ✨\n\n"
+            f"Мы свяжемся с вами в ближайшее время!"
+        )
+
+    # 3. Финальные кнопки
     keyboard = [
         [InlineKeyboardButton("🔄 Подать новую заявку", callback_data="start_menu")],
         [InlineKeyboardButton("🌐 Наш Instagram", url=INSTAGRAM_URL)]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    final_text = (
-        "Спасибо! Ваша заявка успешно записана в Google Таблицу. ✨\n\n"
-        "Мы свяжемся с вами в ближайшее время!"
-    )
-
+    # 4. Отправляем подтверждение (не затирая историю, если был ввод текста)
     if update.callback_query:
-        await update.callback_query.edit_message_text(final_text, reply_markup=reply_markup)
+        await update.callback_query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode='Markdown')
     else:
-        await update.message.reply_text(final_text, reply_markup=reply_markup)
+        await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-    # Уведомление админу / менеджеру
+    # 5. Уведомление админу / менеджеру
     admin_message = (
         f"📥 **Новая заявка из демо-бота!**\n\n"
         f"👤 **Имя:** {user_name}\n"
