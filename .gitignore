@@ -1,1 +1,10 @@
 credentials.json
+venv/
+env/
+.venv/
+# Кэш Python и служебные файлы
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
