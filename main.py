@@ -65,18 +65,20 @@ def get_google_sheet(worksheet_name=None):
         return spreadsheet.worksheet(worksheet_name)
     return spreadsheet.sheet1
 
-# Вспомогательные функции для работы со слотами
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ИСПРАВЛЕННЫЕ) ---
 def get_free_dates():
     try:
         sheet = get_google_sheet("Слоты")
-        records = sheet.get_all_records()
+        rows = sheet.get_all_values()[1:]  # Пропускаем шапку таблицы
         dates = []
-        for r in records:
-            status = str(r.get('Статус', '')).strip().lower()
-            if status in ['свободно', 'free']:
-                date_val = str(r.get('Дата', '')).strip()
-                if date_val and date_val not in dates:
-                    dates.append(date_val)
+        for row in rows:
+            if len(row) >= 3:
+                date_val = str(row[0]).strip()  # Колонка A (Дата)
+                status = str(row[2]).strip().lower()  # Колонка C (Статус)
+                
+                if status in ['свободно', 'free'] and date_val:
+                    if date_val not in dates:
+                        dates.append(date_val)
         return sorted(dates)
     except Exception as e:
         logging.error(f"Error fetching free dates: {e}")
@@ -85,15 +87,17 @@ def get_free_dates():
 def get_free_times(selected_date):
     try:
         sheet = get_google_sheet("Слоты")
-        records = sheet.get_all_records()
+        rows = sheet.get_all_values()[1:]
         times = []
-        for r in records:
-            status = str(r.get('Статус', '')).strip().lower()
-            date_val = str(r.get('Дата', '')).strip()
-            if date_val == str(selected_date).strip() and status in ['свободно', 'free']:
-                time_val = str(r.get('Время', '')).strip()
-                if time_val:
-                    times.append(time_val)
+        for row in rows:
+            if len(row) >= 3:
+                date_val = str(row[0]).strip()
+                time_val = str(row[1]).strip()  # Колонка B (Время)
+                status = str(row[2]).strip().lower()
+                
+                if date_val == str(selected_date).strip() and status in ['свободно', 'free']:
+                    if time_val:
+                        times.append(time_val)
         return times
     except Exception as e:
         logging.error(f"Error fetching free times: {e}")
@@ -102,21 +106,23 @@ def get_free_times(selected_date):
 def book_slot(selected_date, selected_time, user_info):
     try:
         sheet = get_google_sheet("Слоты")
-        records = sheet.get_all_records()
+        rows = sheet.get_all_values()
         
-        for i, r in enumerate(records):
-            status = str(r.get('Статус', '')).strip().lower()
-            date_val = str(r.get('Дата', '')).strip()
-            time_val = str(r.get('Время', '')).strip()
-            
-            if date_val == str(selected_date).strip() and time_val == str(selected_time).strip():
-                if status in ['свободно', 'free']:
-                    row_number = i + 2  # +1 за заголовки, +1 за 1-based индекс
-                    sheet.update_cell(row_number, 3, "Занято")
-                    sheet.update_cell(row_number, 4, user_info)
-                    return True
-                else:
-                    return False
+        for i in range(1, len(rows)):
+            row = rows[i]
+            if len(row) >= 3:
+                date_val = str(row[0]).strip()
+                time_val = str(row[1]).strip()
+                status = str(row[2]).strip().lower()
+                
+                if date_val == str(selected_date).strip() and time_val == str(selected_time).strip():
+                    if status in ['свободно', 'free']:
+                        row_number = i + 1  # 1-based индекс для gspread
+                        sheet.update_cell(row_number, 3, "Занято")     # Колонка C
+                        sheet.update_cell(row_number, 4, user_info)   # Колонка D
+                        return True
+                    else:
+                        return False
         return False
     except Exception as e:
         logging.error(f"Error booking slot: {e}")
@@ -206,7 +212,6 @@ async def back_to_direction_callback(update: Update, context: ContextTypes.DEFAU
     await query.answer()
     return await get_phone(update, context)
 
-# --- НОВАЯ ИСПРАВЛЕННАЯ ФУНКЦИЯ ВОЗВРАТА К ДАТАМ ---
 async def back_to_dates_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
