@@ -259,6 +259,24 @@ async def select_date_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(f"Выбрана дата: **{selected_date}**\nВыберите удобное время:", reply_markup=reply_markup, parse_mode='Markdown')
     return SELECT_TIME
 
+async def back_to_dates_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    dates = get_free_dates()
+    if not dates:
+        await query.edit_message_text(
+            "К сожалению, сейчас нет свободных окон для записи на консультацию. 😔"
+        )
+        return SELECT_DATE
+        
+    keyboard = [[InlineKeyboardButton(f"📅 {d}", callback_data=f"date_{d}")] for d in dates]
+    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_direction")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text("Выберите удобную дату для консультации:", reply_markup=reply_markup)
+    return SELECT_DATE
+
 async def select_time_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -384,9 +402,9 @@ def main():
                 CallbackQueryHandler(get_direction_callback, pattern="^dir_"),
                 CallbackQueryHandler(back_to_phone_callback, pattern="^back_to_phone$")
             ],
-            SELECT_DATE: [
-                CallbackQueryHandler(select_date_callback, pattern="^date_"),
-                CallbackQueryHandler(back_to_direction_callback, pattern="^back_to_direction$")
+           SELECT_TIME: [
+                CallbackQueryHandler(select_time_callback, pattern="^time_"),
+                CallbackQueryHandler(back_to_dates_callback, pattern="^back_to_dates$")
             ],
             SELECT_TIME: [
                 CallbackQueryHandler(select_time_callback, pattern="^time_"),
