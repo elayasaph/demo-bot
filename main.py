@@ -66,14 +66,12 @@ def get_google_sheet(worksheet_name=None):
     return spreadsheet.sheet1
 
 # Вспомогательные функции для работы со слотами
-# Вспомогательные функции для работы со слотами (улучшенные)
 def get_free_dates():
     try:
         sheet = get_google_sheet("Слоты")
         records = sheet.get_all_records()
         dates = []
         for r in records:
-            # Приводим заголовок статуса и его значение к нижнему регистру и очищаем от пробелов
             status = str(r.get('Статус', '')).strip().lower()
             if status in ['свободно', 'free']:
                 date_val = str(r.get('Дата', '')).strip()
@@ -114,7 +112,6 @@ def book_slot(selected_date, selected_time, user_info):
             if date_val == str(selected_date).strip() and time_val == str(selected_time).strip():
                 if status in ['свободно', 'free']:
                     row_number = i + 2  # +1 за заголовки, +1 за 1-based индекс
-                    # Записываем "Занято" в 3-й столбец (C) и инфо в 4-й (D)
                     sheet.update_cell(row_number, 3, "Занято")
                     sheet.update_cell(row_number, 4, user_info)
                     return True
@@ -167,7 +164,6 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PHONE
 
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Сохраняем введенный телефон в контекст
     if update.message:
         context.user_data['phone'] = update.message.text
     
@@ -181,10 +177,8 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = "Выберите интересующее вас направление:"
 
-    # Если пришли после ввода текста — присылаем новое сообщение, сохраняя номер в истории
     if update.message:
         await update.message.reply_text(text, reply_markup=reply_markup)
-    # Если вернулись по кнопке «Назад» — редактируем текущее
     elif update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -206,6 +200,30 @@ async def back_to_phone_callback(update: Update, context: ContextTypes.DEFAULT_T
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("Возвращаемся назад.\n\nУкажите ваш номер телефона для связи:", reply_markup=reply_markup)
     return PHONE
+
+async def back_to_direction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    return await get_phone(update, context)
+
+# --- НОВАЯ ИСПРАВЛЕННАЯ ФУНКЦИЯ ВОЗВРАТА К ДАТАМ ---
+async def back_to_dates_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    dates = get_free_dates()
+    if not dates:
+        await query.edit_message_text(
+            "К сожалению, сейчас нет свободных окон для записи на консультацию. 😔"
+        )
+        return SELECT_DATE
+        
+    keyboard = [[InlineKeyboardButton(f"📅 {d}", callback_data=f"date_{d}")] for d in dates]
+    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_direction")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text("Выберите удобную дату для консультации:", reply_markup=reply_markup)
+    return SELECT_DATE
 
 # --- ОБРАБОТКА НАПРАВЛЕНИЯ ---
 async def get_direction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -259,24 +277,6 @@ async def select_date_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(f"Выбрана дата: **{selected_date}**\nВыберите удобное время:", reply_markup=reply_markup, parse_mode='Markdown')
     return SELECT_TIME
 
-async def back_to_dates_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    dates = get_free_dates()
-    if not dates:
-        await query.edit_message_text(
-            "К сожалению, сейчас нет свободных окон для записи на консультацию. 😔"
-        )
-        return SELECT_DATE
-        
-    keyboard = [[InlineKeyboardButton(f"📅 {d}", callback_data=f"date_{d}")] for d in dates]
-    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_direction")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text("Выберите удобную дату для консультации:", reply_markup=reply_markup)
-    return SELECT_DATE
-
 async def select_time_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -291,7 +291,6 @@ async def select_time_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     user_info = f"{user_name} ({user_phone}, Telegram: {username})"
     
-    # Бронируем слот
     is_booked = book_slot(selected_date, selected_time, user_info)
     
     if is_booked:
@@ -313,16 +312,13 @@ async def finish_submission(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     username = f"@{user_obj.username}" if user_obj.username else "Нет юзернейма"
 
-    # 1. Запись в основную вкладку Google Таблицы
     try:
         sheet = get_google_sheet()
         sheet.append_row([user_name, user_phone, direction_text, username])
     except Exception as e:
         logging.error(f"Error writing to main Google Sheet: {e}")
 
-    # 2. Формируем красивое финальное сообщение
     if direction_text.startswith("Консультация:"):
-        # Извлекаем "10.08 в 14:00" из строки
         details = direction_text.replace("Консультация:", "").strip()
         final_text = (
             f"Спасибо! ✨\n\n"
@@ -336,20 +332,17 @@ async def finish_submission(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             f"Мы свяжемся с вами в ближайшее время!"
         )
 
-    # 3. Финальные кнопки
     keyboard = [
         [InlineKeyboardButton("🔄 Подать новую заявку", callback_data="start_menu")],
         [InlineKeyboardButton("🌐 Наш Instagram", url=INSTAGRAM_URL)]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # 4. Отправляем подтверждение (не затирая историю, если был ввод текста)
     if update.callback_query:
         await update.callback_query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode='Markdown')
     else:
         await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-    # 5. Уведомление админу / менеджеру
     admin_message = (
         f"📥 **Новая заявка из демо-бота!**\n\n"
         f"👤 **Имя:** {user_name}\n"
@@ -374,11 +367,6 @@ async def get_other_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     custom_direction = f"Другое: {update.message.text}"
     return await finish_submission(update, context, custom_direction)
 
-async def back_to_direction_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    return await get_phone(update, context)
-
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Заполнение заявки отменено.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
@@ -402,13 +390,13 @@ def main():
                 CallbackQueryHandler(get_direction_callback, pattern="^dir_"),
                 CallbackQueryHandler(back_to_phone_callback, pattern="^back_to_phone$")
             ],
-           SELECT_TIME: [
-                CallbackQueryHandler(select_time_callback, pattern="^time_"),
-                CallbackQueryHandler(back_to_dates_callback, pattern="^back_to_dates$")
+            SELECT_DATE: [
+                CallbackQueryHandler(select_date_callback, pattern="^date_"),
+                CallbackQueryHandler(back_to_direction_callback, pattern="^back_to_direction$")
             ],
             SELECT_TIME: [
                 CallbackQueryHandler(select_time_callback, pattern="^time_"),
-                CallbackQueryHandler(get_direction_callback, pattern="^back_to_dates$")
+                CallbackQueryHandler(back_to_dates_callback, pattern="^back_to_dates$")
             ],
             OTHER_INPUT: [
                 CallbackQueryHandler(back_to_direction_callback, pattern="^back_to_direction$"),
